@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>  
+        <meta charset="UTF-8">
+        <title>Signed In</title>
+    </head>
+    <body>
+       Welcome {{email}}!
+
+    <button type="button" onclick="location.href{% url 'logout' %}">LOGOUT</button>
+    </body>
+</html>
