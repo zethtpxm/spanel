@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
 import re
 import logging
+from django.shortcuts import redirect
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -70,6 +71,8 @@ def logout(request):
         pass
     return redirect('signIn')
 
+def redirect_to_signin(request):
+    return redirect('signIn')
 
 def signUp(request):
     return render(request, "signUp.html")
