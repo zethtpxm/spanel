@@ -10,14 +10,15 @@
         <title>Sign</title>
     </head>
     <body>  
-        <form action="/postSign/" method="post">
+        <form action="/postSignUp/" method="post">
             {% csrf_token %}
+            Name:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <input type="text" placeholder="Enter your name" name="name"><br><br>
             Email:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             <input type="email" placeholder="Enter Email" name="email"><br><br>
             Password:
             <input type="password" placeholder="Enter Password" name="password"><br><br>
-            <input type="submit" value ="Sign In">
-            <a href="{% url 'signUp' %}"><button type="button">Sign Up</button></a>
+            <input type="submit" value ="Sign Up">
         </form>
     </body>
 </html>
