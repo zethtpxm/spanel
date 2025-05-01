@@ -26,7 +26,6 @@ def redirect_to_signin(request):
 urlpatterns = [
     # Root URL will now redirect to signIn
     path('', redirect_to_signin, name='home'),
-
     path('admin/', admin.site.urls),
     path('signIn/', views.signIn, name='signIn'),
     path('welcome/', views.welcome, name='welcome'),
@@ -36,4 +35,5 @@ urlpatterns = [
     # API endpoints for mobile app
     path('api/login/', views.api_login, name='api_login'),
     path('api/register/', views.api_register, name='api_register')
+
 ]
