@@ -18,22 +18,18 @@ from django.contrib import admin
 from django.urls import path
 from django.shortcuts import redirect
 from . import views
-
-# Add a root URL view function that redirects to signIn
-def redirect_to_signin(request):
-    return redirect('signIn')
+from .views import redirect_to_signin
 
 urlpatterns = [
-    # Root URL will now redirect to signIn
-    path('', redirect_to_signin, name='home'),
+    #path('', redirect_to_signin, name='home'),
     path('admin/', admin.site.urls),
     path('signIn/', views.signIn, name='signIn'),
     path('welcome/', views.welcome, name='welcome'),
     path('logout/', views.logout, name='logout'),
     path('signUp/', views.signUp, name='signUp'),
     path('postSignUp/', views.postSignUp, name='postSignUp'),
-    # API endpoints for mobile app
-    path('api/login/', views.api_login, name='api_login'),
-    path('api/register/', views.api_register, name='api_register')
-
+    path('api_login', views.api_login, name='api_login'),
+    path('api/register/', views.api_register, name='api_register'),
+    # Add the new reset password API endpoint
+    path('api/reset_password', views.api_reset_password, name='api_reset_password'),
 ]

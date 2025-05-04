@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
 import re
 import logging
+from django.shortcuts import redirect
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -70,10 +71,11 @@ def logout(request):
         pass
     return redirect('signIn')
 
+def redirect_to_signin(request):
+    return redirect('signIn')
 
 def signUp(request):
     return render(request, "signUp.html")
-
 
 def postSignUp(request):
     if request.method == 'POST':
@@ -265,6 +267,186 @@ def api_register(request):
                 'success': False,
                 'error': error_message
             }, status=400)
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': 'Only POST method is allowed'
+        }, status=405)
+
+
+@csrf_exempt
+def api_reset_password(request):
+    """
+    API endpoint for resetting user password.
+    Requires:
+    1. Authentication token (Bearer token)
+    2. Email verification
+    3. Current password verification
+    """
+    logging.debug("api_reset_password called")
+
+    if request.method == 'POST':
+        try:
+            logging.debug(f"Request headers: {request.headers}")
+
+            # Extract auth token
+            auth_header = request.headers.get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                logging.warning("Invalid auth header format")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid authentication token'
+                }, status=401)
+
+            token = auth_header.split(' ')[1]
+            logging.debug("Token extracted successfully")
+
+            # Parse request data
+            try:
+                request_body = request.body.decode('utf-8')
+                logging.debug(f"Request body: {request_body}")
+                data = json.loads(request_body)
+            except json.JSONDecodeError as e:
+                logging.error(f"JSON decode error: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid JSON in request body'
+                }, status=400)
+
+            email = data.get('email')
+            current_password = data.get('currentPassword')
+            new_password = data.get('newPassword')
+
+            logging.debug(
+                f"Email: {email}, Current password provided: {'Yes' if current_password else 'No'}, New password provided: {'Yes' if new_password else 'No'}")
+
+            # Validate inputs
+            if not email or not current_password or not new_password:
+                logging.warning("Missing required fields")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'All fields are required'
+                }, status=400)
+
+            try:
+                validate_email(email)
+                validate_password(new_password)
+            except ValidationError as e:
+                logging.warning(f"Validation error: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'error': str(e)
+                }, status=400)
+
+            try:
+                # First, verify the token is valid by getting user info
+                try:
+                    logging.debug(f"Getting account info for token")
+                    # For pyrebase, we can use get_account_info to verify token
+                    user_info = authenticate.get_account_info(token)
+                    logging.debug(f"User info received")
+
+                    if not user_info or 'users' not in user_info or not user_info['users']:
+                        logging.error("Invalid user info returned from Firebase")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Failed to retrieve user information. Session may have expired.'
+                        }, status=401)
+
+                    token_email = user_info['users'][0]['email']
+                    uid = user_info['users'][0]['localId']
+                    logging.debug(f"Token email: {token_email}, Provided email: {email}")
+
+                    # Check if the email provided matches the token's email
+                    if email.lower() != token_email.lower():
+                        logging.warning(f"Email mismatch: {email} vs {token_email}")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Email verification failed. Please ensure you are using your correct email.'
+                        }, status=403)
+
+                    logging.debug("Email verification successful")
+                except Exception as e:
+                    logging.error(f"Token verification error: {str(e)}")
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid or expired session. Please login again.'
+                    }, status=401)
+
+                logging.debug("Verifying current credentials")
+                try:
+                    user = authenticate.sign_in_with_email_and_password(email, current_password)
+                    logging.debug("User authenticated successfully")
+                except Exception as auth_error:
+                    logging.error(f"Authentication error: {str(auth_error)}")
+                    error_str = str(auth_error)
+                    if "INVALID_PASSWORD" in error_str.upper():
+                        return JsonResponse({
+                            'success': False,
+                            'error': "Current password is incorrect"
+                        }, status=400)
+                    elif "INVALID_LOGIN_CREDENTIALS" in error_str.upper():
+                        return JsonResponse({
+                            'success': False,
+                            'error': "Current password is incorrect"
+                        }, status=400)
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"Authentication failed: {error_str}"
+                        }, status=400)
+
+                # Now change the password using the correct method in pyrebase
+                logging.debug("Changing password")
+                try:
+                    user = authenticate.sign_in_with_email_and_password(email, current_password)
+                    # Then use the update_password method which is the correct method in pyrebase
+                    authenticate.update_password(token, new_password)
+                    logging.debug("Password changed successfully")
+
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Password changed successfully'
+                    })
+
+                except Exception as password_change_error:
+                    logging.error(f"Error in password change operation: {str(password_change_error)}")
+                    error_str = str(password_change_error)
+
+                    if "INVALID_ID_TOKEN" in error_str.upper() or "EXPIRED_ID_TOKEN" in error_str.upper():
+                        return JsonResponse({
+                            'success': False,
+                            'error': "Session expired. Please login again."
+                        }, status=401)
+                    elif "WEAK_PASSWORD" in error_str.upper():
+                        return JsonResponse({
+                            'success': False,
+                            'error': "New password is too weak. It must be at least 6 characters."
+                        }, status=400)
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f"Failed to update password: {error_str}"
+                        }, status=400)
+
+            except Exception as e:
+                import traceback
+                error_str = str(e)
+                logging.error(f"Firebase error during password reset: {error_str}")
+                logging.error(f"Traceback: {traceback.format_exc()}")
+
+                # Return detailed error for debugging
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Password reset failed: {error_str}"
+                }, status=400)
+
+        except Exception as e:
+            logging.error(f"General error in password reset: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': "An error occurred. Please try again."
+            }, status=500)
     else:
         return JsonResponse({
             'success': False,
